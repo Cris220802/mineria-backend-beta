@@ -2,6 +2,7 @@ from sqlalchemy import Integer, Column, Float, ForeignKey, Enum, ForeignKeyConst
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
 from db.database import Base
+from models.Elemento import Elemento
 
 class Etapa(str, PyEnum):
     CONCKNELSON = "Concentrado Knelson"
@@ -25,7 +26,7 @@ class CircuitoElemento(Base):
     existencia_teorica = Column(Float, nullable=False)
     desviacion_estandar = Column(Float)
     contenido = Column(Float)
-    existencia_teorica_corregida = Column(Float)
+    ley_corregida = Column(Float)
     distribucion = Column(Float)
 
     # Clave foránea compuesta hacia Circuito (ensaye_id + etapa)
@@ -39,3 +40,4 @@ class CircuitoElemento(Base):
     # Relaciones
     circuito = relationship("Circuito", back_populates="elementos")
     elemento = relationship("Elemento", back_populates="circuitos_association")
+

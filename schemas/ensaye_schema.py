@@ -26,11 +26,12 @@ class ElementoCircuitoRequest(BaseModel):
     existencia_teorica: float  # Campo obligatorio
     desviacion_estandar: Optional[float] = None
     contenido: Optional[float] = None
-    existencia_teorica_corregida: Optional[float] = None
+    ley_corregida: Optional[float] = None
     distribucion: Optional[float] = None
 
 class CircuitoRequest(BaseModel):
     etapa: Etapa  # Etapa del circuito
+    tms: Optional[float] = None
     elementos: List[ElementoCircuitoRequest]
     
 class CreateEnsayeRequest(BaseModel):
@@ -59,7 +60,7 @@ class CircuitoElementoResponse(BaseModel):
     existencia_teorica: float
     desviacion_estandar: Optional[float] = None
     contenido: Optional[float] = None
-    existencia_teorica_corregida: Optional[float] = None
+    ley_corregida: Optional[float] = None
     distribucion: Optional[float] = None
     elemento: ElementoResponse
 
@@ -68,6 +69,7 @@ class CircuitoElementoResponse(BaseModel):
 
 class CircuitoResponse(BaseModel):
     etapa: str
+    tms: Optional[float] = None
     elementos: List[CircuitoElementoResponse]
 
     class Config:

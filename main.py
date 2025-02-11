@@ -6,6 +6,7 @@ from models.Elemento import Elemento
 from models.weaks.Circuito import Circuito
 from models.Usuario import User
 from models.Ensaye import Ensaye
+from models.associations.elemento_circuito import CircuitoElemento
 from auth import auth
 from auth.auth import get_current_user
 from helpers.init_admin import init_admin_user

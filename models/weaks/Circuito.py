@@ -1,8 +1,9 @@
-from sqlalchemy import Integer, Column, Enum, ForeignKey
+from sqlalchemy import Integer, Column, Enum, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
 from db.database import Base
 from models.associations.elemento_circuito import CircuitoElemento
+from models.Ensaye import Ensaye
 
 class Etapa(str, PyEnum):
     CONCKNELSON = "Concentrado Knelson"
@@ -20,6 +21,7 @@ class Circuito(Base):
 
     ensaye_id = Column(Integer, ForeignKey("ensaye.id"), primary_key=True)
     etapa = Column(Enum(Etapa), primary_key=True)
+    tms = Column(Float)
 
     # Relación con Ensaye
     ensaye = relationship("Ensaye", back_populates="circuitos")
@@ -30,3 +32,4 @@ class Circuito(Base):
         back_populates="circuito",
         foreign_keys="[CircuitoElemento.circuito_ensaye_id, CircuitoElemento.circuito_etapa]"
     )
+    

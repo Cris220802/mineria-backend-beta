@@ -1,0 +1,2 @@
+from models.weaks.Circuito import Circuito
+from models.associations.elemento_circuito import CircuitoElemento

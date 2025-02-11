@@ -2,7 +2,8 @@ from sqlalchemy import Column, Integer, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
 from db.database import Base
-
+from models.Usuario import User
+from models.weaks.Producto import Producto
 # Define el Enum de Python
 class TipoEnsayes(str, PyEnum):
     CONCILIADO = "Laboratorio Conciliado"

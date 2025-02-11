@@ -68,7 +68,7 @@ async def create_ensaye(
                     existencia_teorica=elemento.existencia_teorica,
                     desviacion_estandar=elemento.desviacion_estandar,
                     contenido=elemento.contenido,
-                    existencia_teorica_corregida=elemento.existencia_teorica_corregida,
+                    ley_corregida=elemento.ley_corregida,
                     distribucion=elemento.distribucion
                 )
                 db.add(db_association)

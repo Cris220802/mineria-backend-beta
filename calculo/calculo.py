@@ -7,7 +7,7 @@ import time
 
 from calculo.calculo_helpers import *
 
-def calcular_balance(circuitos):
+def calcular_balance(circuitos, ensaye_id):
     tiempo_inicial = time.time()
     print("Iniciando cálculo de ajuste...")
     
@@ -25,16 +25,12 @@ def calcular_balance(circuitos):
     concentrado_fe = obtener_valores_teoricos(circuitos, "Concentrado Fe")
     colas_finales = obtener_valores_teoricos(circuitos, "Colas Finales")
     
-    print(cabeza_flotacion, concentrado_pb, colas_pb, concentrado_zn, colas_zn, concentrado_fe, colas_finales)
-    
     calcular_diferencia('uno_Dos', cabeza_flotacion, concentrado_pb, omegas)
     calcular_diferencia('dos_Tres', concentrado_pb, colas_pb, omegas)
     calcular_diferencia('tres_Cinco', colas_pb, colas_zn, omegas)
     calcular_diferencia('cuatro_Cinco', concentrado_zn, colas_zn, omegas)
     calcular_diferencia('cinco_Siete', colas_zn, colas_finales, omegas)
     calcular_diferencia('seis_Siete', concentrado_fe, colas_finales, omegas)
-    
-    print(omegas)
     
     elevar_omegas('dos_Tres_Cuadrado', omegas['dos_Tres'], omegas)
     elevar_omegas('tres_Cinco_Cuadrado', omegas['tres_Cinco'], omegas)
@@ -47,7 +43,6 @@ def calcular_balance(circuitos):
     
     matriz = {}
 
-# Precalcular los productos para la matriz
     producto_1 = suma_producto_numpy(FACTORES_PONDERACION, omegas['dos_Tres_Cuadrado'])
     producto_2 = suma_producto_numpy(FACTORES_PONDERACION, omegas['tres_Cinco_Cuadrado'])
     producto_3 = suma_producto_numpy(FACTORES_PONDERACION, omegas['cinco_Siete_Cuadrado'])
@@ -104,8 +99,6 @@ def calcular_balance(circuitos):
         ((Fi['Dos'] * concentrado_pb[i]) / (cabeza_flotacion[i] * Fi['Uno'])) * 100
         for i in range(len(cabeza_flotacion))    
     ]
-    
-    print(f"Distribucion contenidos pb: {distribution_Contenidos['X2']}")
 
     distribution_Contenidos['X3'] = [
         ((Fi['Tres'] * colas_pb[i]) / (cabeza_flotacion[i] * Fi['Uno'])) * 100
@@ -445,63 +438,83 @@ def calcular_balance(circuitos):
 
     distribucion = {}
 
-    distribucion['Cabezas'] = dContenidos_Corregidos['X1']
-    distribucion['Conc_Pb'] = dContenidos_Corregidos['X2']
-    distribucion['Conc_Zn'] = dContenidos_Corregidos['X4']
-    distribucion['Conc_Fe'] = dContenidos_Corregidos['X6']
-    distribucion['Colas_Finales'] = dContenidos_Corregidos['X7']
+    distribucion['Cabeza Flotacion'] = dContenidos_Corregidos['X1']
+    distribucion['Concentrado Pb'] = dContenidos_Corregidos['X2']
+    distribucion['Colas Pb'] = dContenidos_Corregidos['X3']
+    distribucion['Concentrado Zn'] = dContenidos_Corregidos['X4']
+    distribucion['Colas Zn'] = dContenidos_Corregidos['X5']
+    distribucion['Concentrado Fe'] = dContenidos_Corregidos['X6']
+    distribucion['Colas Finales'] = dContenidos_Corregidos['X7']
     distribucion['Cabeza_Calculada'] = [
-        round(distribucion['Conc_Pb'][i] + distribucion['Conc_Zn'][i] + distribucion['Conc_Fe'][i] + distribucion['Colas_Finales'][i], 2)
-        for i in range(len(distribucion['Cabezas']))
+        round(distribucion['Concentrado Pb'][i] + distribucion['Concentrado Zn'][i] + distribucion['Concentrado Fe'][i] + distribucion['Colas Finales'][i], 2)
+        for i in range(len(distribucion['Cabeza Flotacion']))
     ]
 
     tsm = [
         CABEZA_GENERAL, solidos_Corregido['X2'], solidos_Corregido['X4'], solidos_Corregido['X6'], solidos_Corregido['X7'], cabeza_Calculada
     ]
+    tms = {}
+    tms['Cabeza Flotacion'] = CABEZA_GENERAL
+    tms['Concentrado Pb'] = solidos_Corregido['X2']
+    tms['Concentrado Zn'] = solidos_Corregido['X4']
+    tms['Concentrado Fe'] = solidos_Corregido['X6']
+    tms['Colas Finales'] = solidos_Corregido['X7']
+    tms['Cabeza Calculada'] = cabeza_Calculada
 
     ensayes = {}
 
-    ensayes['Cabezas'] = leyes_Corregidas['X1']
-    ensayes['Conc_Pb'] = leyes_Corregidas['X2']
-    ensayes['Conc_Zn'] = leyes_Corregidas['X4']
-    ensayes['Conc_Fe'] = leyes_Corregidas['X6']
-    ensayes['Colas_Finales'] = leyes_Corregidas['X7']
-
+    ensayes['Cabeza Flotacion'] = leyes_Corregidas['X1']
+    ensayes['Concentrado Pb'] = leyes_Corregidas['X2']
+    ensayes['Colas Pb'] = leyes_Corregidas['X3']
+    ensayes['Concentrado Zn'] = leyes_Corregidas['X4']
+    ensayes['Colas Zn'] = leyes_Corregidas['X5']
+    ensayes['Concentrado Fe'] = leyes_Corregidas['X6']
+    ensayes['Colas Finales'] = leyes_Corregidas['X7']
 
     contenidos = {}
 
-    contenidos['Cabezas'] = [
-        (tsm[0] * ensayes['Cabezas'][0]) / 1000,
-        (tsm[0] * ensayes['Cabezas'][1]) / 1000,
+    contenidos['Cabeza Flotacion'] = [
+        (tsm[0] * ensayes['Cabeza Flotacion'][0]) / 1000,
+        (tsm[0] * ensayes['Cabeza Flotacion'][1]) / 1000,
         *[
-            (tsm[0] * ensayes['Cabezas'][i]) / 100
-            for i in range(2, len(ensayes['Cabezas']))
+            (tsm[0] * ensayes['Cabeza Flotacion'][i]) / 100
+            for i in range(2, len(ensayes['Cabeza Flotacion']))
         ]
     ]
 
-    contenidos['Conc_Pb'] = [
-        (contenidos['Cabezas'][i] * distribucion['Conc_Pb'][i]) / 100
-        for i in range(len(contenidos['Cabezas']))
+    contenidos['Concentrado Pb'] = [
+        (contenidos['Cabeza Flotacion'][i] * distribucion['Concentrado Pb'][i]) / 100
+        for i in range(len(contenidos['Cabeza Flotacion']))
+    ]
+    
+    contenidos['Colas Pb'] = [
+        (contenidos['Cabeza Flotacion'][i] * distribucion['Colas Pb'][i]) / 100
+        for i in range(len(contenidos['Cabeza Flotacion']))
     ]
 
-    contenidos['Conc_Zn'] = [
-        (contenidos['Cabezas'][i] * distribucion['Conc_Zn'][i]) / 100
-        for i in range(len(contenidos['Cabezas']))
+    contenidos['Concentrado Zn'] = [
+        (contenidos['Cabeza Flotacion'][i] * distribucion['Concentrado Zn'][i]) / 100
+        for i in range(len(contenidos['Cabeza Flotacion']))
+    ]
+    
+    contenidos['Colas Zn'] = [
+        (contenidos['Cabeza Flotacion'][i] * distribucion['Colas Zn'][i]) / 100
+        for i in range(len(contenidos['Cabeza Flotacion']))
     ]
 
-    contenidos['Conc_Fe'] = [
-        (contenidos['Cabezas'][i] * distribucion['Conc_Fe'][i]) / 100
-        for i in range(len(contenidos['Cabezas']))
+    contenidos['Concentrado Fe'] = [
+        (contenidos['Cabeza Flotacion'][i] * distribucion['Concentrado Fe'][i]) / 100
+        for i in range(len(contenidos['Cabeza Flotacion']))
     ]
 
-    contenidos['Colas_Finales'] = [
-        (contenidos['Cabezas'][i] * distribucion['Colas_Finales'][i]) / 100
-        for i in range(len(contenidos['Cabezas']))
+    contenidos['Colas Finales'] = [
+        (contenidos['Cabeza Flotacion'][i] * distribucion['Colas Finales'][i]) / 100
+        for i in range(len(contenidos['Cabeza Flotacion']))
     ]
 
     contenidos['Cabeza_Calculada'] = [
-        contenidos['Conc_Pb'][i] + contenidos['Conc_Zn'][i] + contenidos['Conc_Fe'][i] + contenidos['Colas_Finales'][i]
-        for i in range(len(contenidos['Cabezas']))
+        contenidos['Concentrado Pb'][i] + contenidos['Concentrado Zn'][i] + contenidos['Concentrado Fe'][i] + contenidos['Colas Finales'][i]
+        for i in range(len(contenidos['Cabeza Flotacion']))
     ]
 
     insoluble_Contenidos = [
@@ -517,27 +530,20 @@ def calcular_balance(circuitos):
             for i in range(2, len(contenidos['Cabeza_Calculada']))
         ]
     ]
+    
     tiempo_final = time.time() - tiempo_inicial
+    
+    # Actualizar data en base de datos
+    editar_balance_data(data=circuitos, tms=tms, distribuciones=distribucion, contenidos=contenidos, leyes=ensayes, ensaye_id=ensaye_id)
+    
     print(f"Tiempo de ejecución: {tiempo_final:.6f} segundos")
-    for contenido in contenidos:
-        print(f"Contenido {contenido}: \n")
-        for i in range(len(contenidos[contenido])):
-            print(f"{contenidos[contenido][i]:.6f} \n")
-            
-        
-        
-    for ensaye in ensayes:
-        print(f"Ensaye {ensaye}: \n")
-        for i in range(len(ensayes[ensaye])):
-            print(f"{ensayes[ensaye][i]:.6f} \n")
-
     print("Cálculo finalizado")
     return True
 
 async def ejecutar_calculo_lagrange(users, essay_id, essay_date, essay_shift, circuitos):
     loop = asyncio.get_event_loop()
     with ProcessPoolExecutor() as pool:
-        resultado = await loop.run_in_executor(pool, calcular_balance, circuitos)
+        resultado = await loop.run_in_executor(pool, calcular_balance, circuitos, essay_id)
         if resultado:
             usuarios_validos = [user for user in users if user.rol_id != 4]
             send_notification(usuarios_validos, essay_id, essay_date, essay_shift)
