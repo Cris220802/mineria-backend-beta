@@ -60,8 +60,6 @@ def editar_balance_data(data, tms, distribuciones, leyes, contenidos, ensaye_id:
         # Cerrar la sesión
         db.close()
     
-    
-    
 def calcular_diferencia(nombre, origen1, origen2, omegas):
     omegas[nombre] = [
         origen1[i] - origen2[i]

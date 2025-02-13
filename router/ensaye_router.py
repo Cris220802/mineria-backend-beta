@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import joinedload
 from starlette import status
 from typing import List
@@ -87,13 +87,18 @@ async def create_ensaye(
         raise HTTPException(status_code=400, detail=str(e))
     
 @router.get("/", response_model=List[EnsayeResponse])
-async def get_all_ensayes(db: db_dependency, permission: dict = Depends(permission_required("Supervisor General"))):
+async def get_all_ensayes(
+    db: db_dependency, 
+    permission: dict = Depends(permission_required("Supervisor General")),
+    skip: int = Query(0, alias="page", description="Número de página (0 por defecto)"),
+    limit: int = Query(5, le=50, description="Cantidad de registros por página (máx. 50)")
+    ):
     try:
         ensayes = db.query(Ensaye).options(
             joinedload(Ensaye.user),
             joinedload(Ensaye.producto),
             joinedload(Ensaye.circuitos).joinedload(Circuito.elementos).joinedload(CircuitoElemento.elemento)
-        ).all()
+        ).offset(skip * limit).limit(limit).all()
         return [EnsayeResponse.model_validate(ensaye) for ensaye in ensayes]
         
     except Exception as e:
@@ -102,7 +107,9 @@ async def get_all_ensayes(db: db_dependency, permission: dict = Depends(permissi
 @router.get("/ensayista", response_model=List[EnsayeResponse])
 async def get_ensayes_by_ensayista(
     db: db_dependency,
-    permission: dict = Depends(permission_required("Ensayista"))
+    permission: dict = Depends(permission_required("Ensayista")),
+    skip: int = Query(0, alias="page", description="Número de página (0 por defecto)"),
+    limit: int = Query(5, le=50, description="Cantidad de registros por página (máx. 50)")
     ):
         try:
             user_id = permission.id
@@ -110,7 +117,7 @@ async def get_ensayes_by_ensayista(
                 joinedload(Ensaye.user),
                 joinedload(Ensaye.producto),
                 joinedload(Ensaye.circuitos).joinedload(Circuito.elementos).joinedload(CircuitoElemento.elemento)
-            ).filter(Ensaye.user_id == user_id).all()
+            ).offset(skip * limit).limit(limit).filter(Ensaye.user_id == user_id).all()
             
             return [EnsayeResponse.model_validate(ensaye) for ensaye in ensayes]
         
@@ -121,7 +128,9 @@ async def get_ensayes_by_ensayista(
 async def get_ensayes_by_ensayista_by_id(
     db: db_dependency,
     id: int,
-    permission: dict = Depends(permission_required("Ensayista"))
+    permission: dict = Depends(permission_required("Ensayista")),
+    skip: int = Query(0, alias="page", description="Número de página (0 por defecto)"),
+    limit: int = Query(5, le=50, description="Cantidad de registros por página (máx. 50)")
     ):
         try:
             user_id = permission.id
@@ -130,7 +139,7 @@ async def get_ensayes_by_ensayista_by_id(
                 joinedload(Ensaye.user),
                 joinedload(Ensaye.producto),
                 joinedload(Ensaye.circuitos).joinedload(Circuito.elementos).joinedload(CircuitoElemento.elemento)
-            ).filter(Ensaye.user_id == user_id, Ensaye.id == id).first()
+            ).offset(skip * limit).limit(limit).filter(Ensaye.user_id == user_id, Ensaye.id == id).first()
             
             return EnsayeResponse.model_validate(ensaye)
         
@@ -141,7 +150,8 @@ async def get_ensayes_by_ensayista_by_id(
 async def get_ensaye_by_id(
     db: db_dependency,
     id: int,
-    permission: dict = Depends(permission_required("Supervisor General"))):
+    permission: dict = Depends(permission_required("Supervisor General"))
+    ):
         try:
             ensaye = db.query(Ensaye).options(
                 joinedload(Ensaye.user),
