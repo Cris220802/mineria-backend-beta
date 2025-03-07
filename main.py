@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends
+from fastapi.openapi.utils import get_openapi
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
 from starlette import status
 from db.database import engine, Base, get_db
@@ -19,6 +21,43 @@ from router import usuario_router, rol_router, ensaye_router
 Base.metadata.create_all(engine)
 
 app = FastAPI()
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title="MinerIA",
+        version="1.0.0",
+        description="API de aplicacion Web MinerIA",
+        routes=app.routes,
+    )
+    
+    # Habilitar withCredentials en Swagger UI
+    openapi_schema["components"]["securitySchemes"] = {
+        "cookieAuth": {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": "access_token",
+        }
+    }
+    openapi_schema["security"] = [{"cookieAuth": []}]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Origen de tu frontend
+    allow_credentials=True,  # Permitir cookies
+    allow_methods=["*"],  # Permitir todos los métodos (GET, POST, etc.)
+    allow_headers=["*"],  # Permitir todos los headers
+)
+
+
 app.include_router(auth.router)
 app.include_router(usuario_router.router)
 app.include_router(rol_router.router)

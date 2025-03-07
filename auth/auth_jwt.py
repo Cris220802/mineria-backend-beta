@@ -1,6 +1,6 @@
 from datetime import timedelta, datetime
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette import status
@@ -34,22 +34,12 @@ def get_db():
 db_dependency = Annotated[Session, Depends(get_db)]
     
 @router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency, response: Response):
+async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency):
     user = autenticate_user(form_data.username, form_data.password, db)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales Incorrectas")
     
     token = create_access_token(user.email, user.id, timedelta(minutes=20))
-    
-     # Configurar la cookie
-    response.set_cookie(
-        key="access_token",
-        value=token,  # Solo el token, sin "Bearer"
-        httponly=True,  # Previene acceso a la cookie via JavaScript
-        secure=False,    # Solo enviar la cookie sobre HTTPS, mientras False, cuando este en produccion True
-        samesite="lax", # Previene envío de la cookie en solicitudes cross-site
-        max_age=20 * 60  # Duración en segundos (20 minutos)
-    )
     
     return {"access_token": token, "token_type": "bearer"}
 
@@ -64,21 +54,13 @@ def autenticate_user(email, password, db: db_dependency):
     
     return user
 
-async def get_token_from_cookie(access_token: str = Cookie(None)):
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No se proporcionó un token de acceso"
-        )
-    return access_token
-
 def create_access_token(email: str, user_id: int, expires_delta: timedelta):
     encode = {'sub': email, 'id': user_id}
     expires = datetime.utcnow() + expires_delta
     encode.update({'exp': expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
 
-async def get_current_user(token: Annotated[str, Depends(get_token_from_cookie)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_beaer)]):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get('sub')
