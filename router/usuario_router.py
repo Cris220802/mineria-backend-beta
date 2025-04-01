@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from starlette import status
@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 from db.database import db_dependency
 from models.Usuario import User
 from models.Rol import Rol
-from schemas.usuario_schema import UsuarioBase, CreateUserRequest
+from schemas.usuario_schema import UsuarioBase, CreateUserRequest, UpdateUserRequest
 from auth.auth import permission_required
 
 
@@ -54,9 +54,15 @@ async def create_user(
 @router.get("/", response_model=list[UsuarioBase])
 async def read_users(
     db: db_dependency,
+    response: Response,
     permission: dict = Depends(permission_required("Supervisor General"))
     ):
     users = db.query(User).all() 
+    
+     # Asegurar que se permiten credenciales en CORS
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    
     return [UsuarioBase.model_validate(user) for user in users]  
 
 @router.get('/{id}', response_model=UsuarioBase)
@@ -76,7 +82,7 @@ async def read_user(
 async def update_user(
     db: db_dependency,
     id: int,
-    update_user_request: CreateUserRequest,
+    update_user_request: UpdateUserRequest,
     permission: dict = Depends(permission_required("Supervisor General"))
 ):
     user = db.query(User).filter(User.id == id).first()
@@ -90,8 +96,11 @@ async def update_user(
         user.name = update_user_request.name
     if update_user_request.email:
         user.email = update_user_request.email
-    if update_user_request.password:
-        user.hashed_password = bcrypt_context.hash(update_user_request.password)
+    if update_user_request.new_password:
+        if not bcrypt_context.verify(update_user_request.confirm_password, user.hashed_password):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La contraseña anterior es incorrecta")
+        
+        user.hashed_password = bcrypt_context.hash(update_user_request.new_password)
     
     # Verificar si el rol ha cambiado y actualizarlo si es necesario
     if update_user_request.rol_id:

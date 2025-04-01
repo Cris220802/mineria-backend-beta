@@ -53,8 +53,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],  # Origen de tu frontend
     allow_credentials=True,  # Permitir cookies
-    allow_methods=["*"],  # Permitir todos los métodos (GET, POST, etc.)
-    allow_headers=["*"],  # Permitir todos los headers
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Permitir todos los métodos (GET, POST, etc.)
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],  # Permitir todos los headers
 )
 
 

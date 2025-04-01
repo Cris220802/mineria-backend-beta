@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from schemas.rol_schema import RolBase
+from typing import Optional
 
 class UsuarioBase(BaseModel):
     id: int
@@ -16,5 +17,12 @@ class CreateUserRequest(BaseModel):
     password: str
     name: str
     rol_id: int
+    
+class UpdateUserRequest(BaseModel):
+    email: Optional[str] = None
+    name: Optional[str] = None
+    confirm_password: Optional[str] = None
+    new_password: Optional[str] = None
+    rol_id: Optional[int] = None
     
     

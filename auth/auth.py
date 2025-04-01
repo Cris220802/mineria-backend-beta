@@ -46,8 +46,8 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
         key="access_token",
         value=token,  # Solo el token, sin "Bearer"
         httponly=True,  # Previene acceso a la cookie via JavaScript
-        secure=False,    # Solo enviar la cookie sobre HTTPS, mientras False, cuando este en produccion True
-        samesite="lax", # Previene envío de la cookie en solicitudes cross-site
+        secure=True,    # Solo enviar la cookie sobre HTTPS, mientras False, cuando este en produccion True
+        samesite="None", # Previene envío de la cookie en solicitudes cross-site
         max_age=20 * 60  # Duración en segundos (20 minutos)
     )
     
