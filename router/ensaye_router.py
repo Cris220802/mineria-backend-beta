@@ -2,6 +2,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import joinedload
 from starlette import status
+from datetime import date, datetime, time
 from typing import List
 import asyncio
 
@@ -14,7 +15,6 @@ from models.weaks.Circuito import Circuito
 from models.associations.elemento_circuito import CircuitoElemento
 from schemas.usuario_schema import UsuarioBase
 from schemas.ensaye_schema import CreateEnsayeRequest, EnsayeResponse, ElementoResponse, CircuitoElementoResponse, CircuitoResponse, ProductoResponse
-from auth.auth import permission_required
 from calculo.calculo import ejecutar_calculo_lagrange
 
 router = APIRouter(
@@ -29,8 +29,28 @@ async def create_ensaye(
     permission: dict = Depends(permission_required("Ensayista"))
     ):
     try:
-        
         user_id = permission.id
+
+        if isinstance(ensaye_request.fecha, datetime):
+            ensaye_fecha = ensaye_request.fecha.date()
+        else:
+            ensaye_fecha = ensaye_request.fecha
+
+        start_of_day = datetime.combine(ensaye_fecha, time.min)  # 00:00:00
+        end_of_day = datetime.combine(ensaye_fecha, time.max)    # 23:59:59.999999
+
+        existing_ensaye = db.query(Ensaye).filter(
+            Ensaye.fecha >= start_of_day,
+            Ensaye.fecha <= end_of_day,
+            Ensaye.turno == ensaye_request.turno
+        ).first()
+
+        if existing_ensaye:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El ensaye del turno {ensaye_request.turno} ya ha sido registrado para la fecha {ensaye_fecha}."
+            )
+
         # Crear Ensaye
         db_ensaye = Ensaye(
             fecha=ensaye_request.fecha,
@@ -74,12 +94,20 @@ async def create_ensaye(
                 db.add(db_association)
 
         db.commit()
-        
+
         usuarios = db.query(User).all()
-        
+
         # Iniciar el cálculo en segundo plano
-        asyncio.create_task(ejecutar_calculo_lagrange(users = usuarios, essay_date=db_ensaye.fecha, essay_id=db_ensaye.id, essay_shift=db_ensaye.turno, circuitos=ensaye_request))
-        
+        asyncio.create_task(
+            ejecutar_calculo_lagrange(
+                users=usuarios,
+                essay_date=db_ensaye.fecha,
+                essay_id=db_ensaye.id,
+                essay_shift=db_ensaye.turno,
+                circuitos=ensaye_request
+            )
+        )
+
         return {"message": "Ensaye registrado exitosamente", "ensaye_id": db_ensaye.id}
 
     except Exception as e:

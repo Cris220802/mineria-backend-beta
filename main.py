@@ -13,7 +13,7 @@ from auth import auth
 from auth.auth import get_current_user
 from helpers.init_admin import init_admin_user
 
-from router import usuario_router, rol_router, ensaye_router
+from router import usuario_router, rol_router, ensaye_router, dashboard_router
 
 
 # Crear las tablas en la base de datos
@@ -62,6 +62,7 @@ app.include_router(auth.router)
 app.include_router(usuario_router.router)
 app.include_router(rol_router.router)
 app.include_router(ensaye_router.router)
+app.include_router(dashboard_router.router)
 
 user_dependency = Annotated[dict, Depends(get_current_user)]
 
