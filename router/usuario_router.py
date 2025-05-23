@@ -42,7 +42,8 @@ async def create_user(
         name=create_user_request.name,
         email=create_user_request.email,
         hashed_password=bcrypt_context.hash(create_user_request.password),
-        rol=rol  # Asignar la instancia de 'Rol' en lugar del 'rol_id'
+        rol=rol,  # Asignar la instancia de 'Rol' en lugar del 'rol_id'
+        active=create_user_request.active
     )
     
     db.add(create_user_model)

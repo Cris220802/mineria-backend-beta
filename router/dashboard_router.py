@@ -19,8 +19,6 @@ router = APIRouter(
     tags=['dashboard']
 )
 
-
-# @router.get("/", response_model=DashboardResponse)
 @router.get("/")
 async def get_dashboard(
     db: db_dependency, 
@@ -41,6 +39,7 @@ async def get_dashboard(
             "ensayes": ensayes
         }
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/resumen")

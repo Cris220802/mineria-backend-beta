@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, Column, ForeignKey
+from sqlalchemy import String, Integer, Column, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from db.database import Base
 from models.Rol import Rol
@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
+    active = Column(Boolean, nullable=False)
 
     # Relación con Rol y Ensaye
     rol = relationship("Rol", back_populates="users")

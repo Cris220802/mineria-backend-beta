@@ -7,6 +7,7 @@ class UsuarioBase(BaseModel):
     email: str
     name: str
     rol: RolBase
+    active: bool
     
     class Config:
         from_attributes=True
@@ -17,6 +18,7 @@ class CreateUserRequest(BaseModel):
     password: str
     name: str
     rol_id: int
+    active: bool
     
 class UpdateUserRequest(BaseModel):
     email: Optional[str] = None
@@ -24,5 +26,6 @@ class UpdateUserRequest(BaseModel):
     confirm_password: Optional[str] = None
     new_password: Optional[str] = None
     rol_id: Optional[int] = None
+    active: Optional[int] = None
     
     

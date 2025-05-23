@@ -65,7 +65,8 @@ def init_admin_user(db: Session):
                 email="supervisor_general@example.com",
                 name="Administrador General",
                 hashed_password=pwd_context.hash("admin123"),
-                rol_id=admin_role.id  # Asignar el rol a través del ID
+                rol_id=admin_role.id,  # Asignar el rol a través del ID
+                active=True
             )
             db.add(admin_user)
             db.commit()
