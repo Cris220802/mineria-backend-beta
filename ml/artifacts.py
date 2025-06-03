@@ -26,12 +26,12 @@ def load_all_artifacts():
         print("Artefactos de ML ya están cargados.")
         return
 
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id='SECRET',
-        aws_secret_access_key='SECRET',
-        region_name='us-east-1'
-    )
+    # s3_client = boto3.client(
+    #     's3',
+    #     aws_access_key_id='SECRET',
+    #     aws_secret_access_key='SECRET',
+    #     region_name='us-east-1'
+    # )
     print("Cargando artefactos de ML desde S3...")
 
     try:
