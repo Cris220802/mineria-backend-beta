@@ -28,8 +28,8 @@ def load_all_artifacts():
 
     s3_client = boto3.client(
         's3',
-        aws_access_key_id='AKIAYGGSJA5XGZ6SIYGM',
-        aws_secret_access_key='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',
+        aws_access_key_id='SECRET',
+        aws_secret_access_key='SECRET',
         region_name='us-east-1'
     )
     print("Cargando artefactos de ML desde S3...")
