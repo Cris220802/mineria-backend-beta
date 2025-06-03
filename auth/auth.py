@@ -39,7 +39,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales Incorrectas")
     
-    token = create_access_token(user.email, user.id, timedelta(minutes=20))
+    token = create_access_token(user.email, user.id, timedelta(minutes=1440))
     
      # Configurar la cookie
     response.set_cookie(
@@ -48,7 +48,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
         httponly=True,  # Previene acceso a la cookie via JavaScript
         secure=True,    # Solo enviar la cookie sobre HTTPS, mientras False, cuando este en produccion True
         samesite="None", # Previene envío de la cookie en solicitudes cross-site
-        max_age=20 * 60  # Duración en segundos (20 minutos)
+        max_age=1440 * 60  # Duración en segundos (20 minutos)
     )
     
     return {"access_token": token, "token_type": "bearer"}

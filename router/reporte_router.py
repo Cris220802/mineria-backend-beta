@@ -52,6 +52,7 @@ def get_report(
     elements: Optional[List[int]] = Query(None),
     db=db_dependency
 ):
+        
     today = date.today()
 
     # Obtener el rango de fechas

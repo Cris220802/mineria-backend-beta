@@ -6,6 +6,7 @@ from mail.email import send_notification
 import time
 
 from calculo.calculo_helpers import *
+from sockets.connection_manager import manager
 
 def calcular_balance(circuitos, ensaye_id):
     tiempo_inicial = time.time()
@@ -542,13 +543,70 @@ def calcular_balance(circuitos, ensaye_id):
 
 async def ejecutar_calculo_lagrange(users, essay_id, essay_date, essay_shift, circuitos):
     loop = asyncio.get_event_loop()
-    with ProcessPoolExecutor() as pool:
-        resultado = await loop.run_in_executor(pool, calcular_balance, circuitos, essay_id)
-        if resultado:
-            usuarios_validos = [user for user in users if user.rol_id != 4]
-            send_notification(usuarios_validos, essay_id, essay_date, essay_shift)
-        else:
-            print("Error al realizar el cálculo de ajuste")
+    ensaye_id_str = str(essay_id)
+    try:
+        with ProcessPoolExecutor() as pool:
+            print(f"[{ensaye_id_str}] Iniciando cálculo de balance en ProcessPoolExecutor...")
+            # Asegúrate que 'circuitos_request_data' y 'essay_id' sean picklables para ProcessPoolExecutor
+            # 'calcular_balance' es tu función síncrona y pesada
+            resultado_calculo = await loop.run_in_executor(pool, calcular_balance, circuitos, essay_id)
+            print(f"[{ensaye_id_str}] Cálculo de balance finalizado. Resultado: {resultado_calculo}")
+
+        if resultado_calculo: # Asume que True o un objeto evaluado como True significa éxito
+            await manager.send_status_update(
+                ensaye_id_str,
+                "balance_calculation_finished",
+                "Cálculo de balance finalizado exitosamente.",
+                success=True
+            )
+
+            # Ahora, enviar el email
+            usuarios_validos = [user for user in users if user.rol_id != 4] # Asumiendo que 'users' son tus objetos User con 'rol_id'
             
+            email_enviado_exitosamente = await send_notification(
+                usuarios_validos, essay_id, essay_date, essay_shift
+            )
+
+            if email_enviado_exitosamente:
+                await manager.send_status_update(
+                    ensaye_id_str,
+                    "email_notification_sent",
+                    "Notificación por correo enviada exitosamente.",
+                    success=True
+                )
+            else:
+                await manager.send_status_update(
+                    ensaye_id_str,
+                    "email_notification_sent",
+                    "Error al enviar la notificación por correo.",
+                    success=False
+                )
+        else:
+            # El cálculo de balance falló
+            await manager.send_status_update(
+                ensaye_id_str,
+                "balance_calculation_finished",
+                "Error durante el cálculo de balance.",
+                success=False
+            )
+            # Opcionalmente, indicar que el email no se envió debido a esto
+            await manager.send_status_update(
+                ensaye_id_str,
+                "email_notification_sent",
+                "Envío de correo omitido debido a error en cálculo de balance.",
+                success=False, # O un estado "skipped" si prefieres
+                data={"reason": "balance_calculation_failed"}
+            )
+
+    except Exception as e:
+        print(f"Error general en la tarea de fondo para ensaye {ensaye_id_str}: {e}")
+        await manager.send_status_update(
+            ensaye_id_str,
+            "background_task_error",
+            f"Error inesperado durante el procesamiento en segundo plano: {str(e)}",
+            success=False
+        )
+
+                
             
             

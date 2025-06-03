@@ -19,7 +19,7 @@ class Etapa(str, Enum):
 # Enum para el tipo de ensaye (ajusta según tus valores)
 class TipoEnsayes(str, Enum):
     CONCILIADO = "Laboratorio Conciliado"
-    REAL = "Laboratiorio Real"
+    REAL = "Laboratorio Real"
 
 class ElementoCircuitoRequest(BaseModel):
     elemento_id: int  # ID del elemento en la DB
