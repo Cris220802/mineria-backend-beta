@@ -29,6 +29,7 @@ loaded_models = {}
 
 # Crear las tablas en la base de datos
 #Base.metadata.drop_all(engine)  # Borra todas las tablas
+
 Base.metadata.create_all(engine)
 
 @asynccontextmanager

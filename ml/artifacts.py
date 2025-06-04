@@ -3,6 +3,8 @@ import joblib
 from io import BytesIO
 from typing import Dict, Any
 from sklearn.preprocessing import StandardScaler
+from dotenv import load_dotenv
+import os
 # Asumiendo que LightGBMRegressor fue guardado con joblib, si no, ajusta la carga
 # from lightgbm import LGBMRegressor # Solo para type hinting si es necesario
 
@@ -13,6 +15,11 @@ from config import (
     SCALER_PB_FILENAME,
     MODEL_FILENAME_TEMPLATE
 )
+
+load_dotenv()
+
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SCRET_ACCESS_KEY = os.getenv('AWS_SCRET_ACCESS_KEY')
 
 # Variables globales para almacenar los artefactos cargados
 SCALER: StandardScaler = None
@@ -28,8 +35,8 @@ def load_all_artifacts():
 
     s3_client = boto3.client(
         's3',
-        aws_access_key_id='AKIAYGGSJA5XGZ6SIYGM',
-        aws_secret_access_key='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',
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SCRET_ACCESS_KEY,
         region_name='us-east-1'
     )
     print("Cargando artefactos de ML desde S3...")
