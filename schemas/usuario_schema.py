@@ -28,4 +28,6 @@ class UpdateUserRequest(BaseModel):
     rol_id: Optional[int] = None
     active: Optional[int] = None
     
+class AuthMeResponse(BaseModel):
+    user: UsuarioBase
     

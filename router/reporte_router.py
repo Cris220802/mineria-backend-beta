@@ -33,7 +33,7 @@ async def get_reporte(
     elements: Optional[List[int]] = Query(None, description="Lista de elementos para filtrar (opcional)")
 ):
     try:
-        report = get_report(init_date=init_date, final_date=final_date, shift=shift, laboratory=laboratory, user=user, elements=elements, db=db)
+        report = _fetch_report_part_safely(get_report, init_date=init_date, final_date=final_date, shift=shift, laboratory=laboratory, user=user, elements=elements, db=db)
         
         return {
             "reporte": report
@@ -81,7 +81,10 @@ def get_report(
         query = query.filter(Ensaye.turno == shift)
 
     if laboratory:
-        query = query.filter(Ensaye.laboratorio == laboratory)
+        if laboratory == "Laboratorio Real":
+            query = query.filter(Ensaye.tipo_ensaye == "REAL")
+        else:
+            query = query.filter(Ensaye.tipo_ensaye == "CONCILIADO")
 
     if user:
         query = query.filter(Ensaye.user_id == user)
@@ -243,3 +246,20 @@ def get_laws_report(ensayes=[], elementos=[], circuitos=[]):
             {"etapa": "CONCFE", "valores": etapaCONCFE}
         ]
     }
+    
+def _fetch_report_part_safely(fetch_function, *args, **kwargs):
+    """
+    Ejecuta una función para obtener una parte del dashboard.
+    Si la función lanza HTTPException, devuelve el mensaje de detalle.
+    Si lanza cualquier otra Exception, devuelve un mensaje de error genérico para esa parte.
+    Si tiene éxito, devuelve los datos.
+    """
+    function_name = fetch_function.__name__
+    try:
+        return fetch_function(*args, **kwargs)
+    except HTTPException as he:     
+        return he # Esto se convertirá en el valor para la clave de esta sección
+    except Exception as e:
+        # Para errores de servidor inesperados dentro de la función de servicio.
+        print(f"ERROR: Error inesperado en '{function_name}' al construir dashboard principal: {type(e).__name__} - {e}")
+        return f"Error interno al procesar datos para '{function_name.replace('get_', '')}'."

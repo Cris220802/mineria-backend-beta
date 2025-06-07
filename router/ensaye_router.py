@@ -128,20 +128,75 @@ async def create_ensaye(
 
 
     
-@router.get("/", response_model=List[EnsayeResponse])
+@router.get("/")
 async def get_all_ensayes(
     db: db_dependency, 
     permission: dict = Depends(permission_required("Supervisor General")),
-    skip: int = Query(0, alias="page", description="Número de página (0 por defecto)"),
-    limit: int = Query(5, le=50, description="Cantidad de registros por página (máx. 50)")
+    skip: int = Query(0, description="Número de página (0 por defecto)"),
+    limit: int = Query(5, le=50, description="Cantidad de registros por página (máx. 50)"),
+    init_date: Optional[str] = Query(None, description="Fecha inicial de busqueda (opcional)"),
+    final_date: Optional[str] = Query(None, description="Fecha final de busqueda (opcional)"),
+    shift: Optional[int] = Query(None, alias="shift", description="Filtro de turno de reporte (opcional)"),
+    laboratory: Optional[TipoEnsayes] = Query(None, alias="laboratory", description="Filtro de laboratorio (opcional)"),
     ):
     try:
-        ensayes = db.query(Ensaye).options(
+        
+        # Validar que si viene init_date, también venga final_date y viceversa
+        if (init_date or final_date):
+            if (init_date and not final_date) or (final_date and not init_date):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Debe proporcionar ambas fechas (inicio y fin) o ninguna"
+                )
+            
+        today = date.today()
+
+        # Obtener el rango de fechas
+        if init_date and final_date:
+            try:
+                init_date = date.fromisoformat(init_date)
+                final_date = date.fromisoformat(final_date)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usa YYYY-MM-DD.")
+        else:
+            final_date = today
+            init_date = today - timedelta(days=30)
+            
+            
+            
+        query = db.query(Ensaye).options(
             joinedload(Ensaye.user),
             joinedload(Ensaye.producto),
             joinedload(Ensaye.circuitos).joinedload(Circuito.elementos).joinedload(CircuitoElemento.elemento)
-        ).offset(skip * limit).limit(limit).all()
-        return [EnsayeResponse.model_validate(ensaye) for ensaye in ensayes]
+        )
+        
+         # Agregar filtros opcionales
+        if shift:
+            query = query.filter(Ensaye.turno == shift)
+
+        if laboratory:
+            query = query.filter(Ensaye.laboratorio == laboratory)
+            
+        # Agregar filtro por rango de fechas
+        if init_date and final_date:
+            # Asegúrate que la columna se llame 'fecha' en tu modelo Ensaye
+            query = query.filter(Ensaye.fecha.between(init_date, final_date))
+                
+        # Obtener el conteo total (antes de paginar)
+        total_count = query.count()
+            
+        # Aplicar paginación
+        ensayes = query.offset(skip * limit).limit(limit).all()
+
+        # Convertir a modelos de respuesta
+        data = [EnsayeResponse.model_validate(ensaye) for ensaye in ensayes]
+            
+        return {
+            "data": data,
+            "totalCount": total_count,
+            "page": skip,
+            "pageSize": limit
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -150,7 +205,7 @@ async def get_all_ensayes(
 async def get_ensayes_by_ensayista(
     db: db_dependency,
     permission: dict = Depends(permission_required("Ensayista")),
-    skip: int = Query(0, alias="page", description="Número de página (0 por defecto)"),
+    skip: int = Query(0, description="Número de página (0 por defecto)"),
     limit: int = Query(2, le=50, description="Cantidad de registros por página (máx. 50)"),
     init_date: Optional[str] = Query(None, description="Fecha inicial de busqueda (opcional)"),
     final_date: Optional[str] = Query(None, description="Fecha final de busqueda (opcional)"),
@@ -244,21 +299,45 @@ async def get_ensaye_by_id(
     db: db_dependency,
     id: int,
     permission: dict = Depends(permission_required("Supervisor General"))
-    ):
-        try:
-            ensaye = db.query(Ensaye).options(
-                joinedload(Ensaye.user),
-                joinedload(Ensaye.producto),
-                joinedload(Ensaye.circuitos).joinedload(Circuito.elementos).joinedload(CircuitoElemento.elemento)
-            ).filter(Ensaye.id == id).first()
-            
-            if not ensaye:
-                raise HTTPException(status_code=404, detail="Ensaye no encontrado")
-            
-            return EnsayeResponse.model_validate(ensaye)
-            
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+):
+    try:
+        ensaye = db.query(Ensaye).options(
+            joinedload(Ensaye.user),
+            joinedload(Ensaye.producto),
+            joinedload(Ensaye.circuitos).joinedload(Circuito.elementos).joinedload(CircuitoElemento.elemento)
+        ).filter(Ensaye.id == id).first()
+
+        if not ensaye:
+            raise HTTPException(status_code=404, detail="Ensaye no encontrado")
+
+        # --- INICIO DE LA LÓGICA DE ORDENAMIENTO ---
+
+        # 1. Define el orden exacto que deseas para las etapas.
+        #    Añadí "Colas Pb" y "Colas Zn" al final por si aparecen.
+        order_list = [
+            "Cabeza Flotacion",
+            "Concentrado Pb",
+            "Concentrado Zn",
+            "Concentrado Fe",
+            "Colas Finales",
+            "Colas Pb",
+            "Colas Zn"
+        ]
+        
+        # 2. Crea un mapa para que cada etapa tenga un valor numérico de orden.
+        #    Etapas no listadas recibirán un valor alto (99) para ir al final.
+        order_map = {etapa: i for i, etapa in enumerate(order_list)}
+
+        # 3. Ordena la lista de circuitos del ensaye usando el mapa como clave.
+        ensaye.circuitos.sort(key=lambda circuito: order_map.get(circuito.etapa, 99))
+
+        # --- FIN DE LA LÓGICA DE ORDENAMIENTO ---
+        
+        # Ahora el objeto 'ensaye' tiene sus circuitos ordenados antes de validarlo.
+        return EnsayeResponse.model_validate(ensaye)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
         
 @router.websocket("/ws/status/{ensaye_id}")
 async def websocket_ensaye_status(websocket: WebSocket, ensaye_id: str):

@@ -2,7 +2,7 @@ from datetime import timedelta, datetime
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from starlette import status
 
 from db.database import SessionLocal
@@ -12,6 +12,7 @@ from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import jwt, JWTError
 from schemas.token_schema import Token
+from schemas.usuario_schema import AuthMeResponse
 
 router = APIRouter(
     prefix="/auth",
@@ -48,10 +49,13 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
         httponly=True,  # Previene acceso a la cookie via JavaScript
         secure=True,    # Solo enviar la cookie sobre HTTPS, mientras False, cuando este en produccion True
         samesite="None", # Previene envío de la cookie en solicitudes cross-site
-        max_age=1440 * 60  # Duración en segundos (20 minutos)
+        max_age=1440 * 60,  # Duración en segundos (20 minutos)
+        path="/"
     )
     
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "bearer", "rol": user.rol.name}
+
+
 
 def autenticate_user(email, password, db: db_dependency):
     user = db.query(User).filter(User.email == email).first()
@@ -112,3 +116,33 @@ def permission_required(*required_roles: str):
         
         return user
     return permission_dependency
+
+@router.get("/me", response_model=AuthMeResponse)
+async def get_logged_in_user(
+    db: db_dependency,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.get('user_id')
+    
+    # Esta lógica ya era correcta, usamos joinedload para eficiencia
+    user = db.query(User).options(joinedload(User.rol)).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Token válido, pero usuario no encontrado en la base de datos."
+        )
+
+    return {"user": user}
+
+@router.post("/logout")
+async def logout(response: Response):
+    """
+    Cierra la sesión del usuario eliminando la cookie de acceso de la ruta raíz.
+    """
+    response.delete_cookie(
+        key="access_token", 
+        path="/",
+    )
+    
+    return {"message": "Sesión cerrada exitosamente"}

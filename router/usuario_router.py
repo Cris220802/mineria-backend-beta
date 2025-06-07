@@ -1,7 +1,8 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from starlette import status
 from passlib.context import CryptContext
 
@@ -52,19 +53,53 @@ async def create_user(
     
     return create_user_model
 
-@router.get("/", response_model=list[UsuarioBase])
+@router.get("/")
 async def read_users(
     db: db_dependency,
-    response: Response,
-    permission: dict = Depends(permission_required("Supervisor General"))
+    permission: dict = Depends(permission_required("Supervisor General")),
+    skip: int = Query(0, description="Número de página (0 por defecto)"),
+    limit: int = Query(10, le=50, description="Cantidad de registros por página (máx. 50)"),
+    user_id: int = Query(None, description="buscar por id de usuario"),
+    rol: int = Query(None, description="buscar por rol de usuario"),
+    name: str = Query(None, description="buscar por nombre de usuario"),
     ):
-    users = db.query(User).all() 
+    query = db.query(User)
     
-     # Asegurar que se permiten credenciales en CORS
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
+    if user_id:
+        query = query.filter(User.id == user_id)
+        
+    if rol:
+        query = query.filter(User.rol_id == rol)
     
-    return [UsuarioBase.model_validate(user) for user in users]  
+    if name:
+        # Busca cualquier nombre que CONTENGA el texto de 'name', sin importar mayúsculas/minúsculas.
+        query = query.filter(User.name.ilike(f"%{name}%"))
+        
+    total_count = query.count()
+    
+    users = query.offset(skip * limit).limit(limit).all()
+    
+    # Convertir a modelos de respuesta
+    data = [UsuarioBase.model_validate(user) for user in users]
+            
+    return {
+        "data": data,
+        "totalCount": total_count,
+        "page": skip,
+        "pageSize": limit
+    }
+    
+@router.get("/ensayistas")
+async def read_ensayistas(
+    db: db_dependency,
+    permission: dict = Depends(permission_required("Supervisor General")),
+    ):
+    users = db.query(User).filter(User.rol_id == 4).all()
+       
+    # Convertir a modelos de respuesta
+    return [UsuarioBase.model_validate(user) for user in users]
+
+
 
 @router.get('/{id}', response_model=UsuarioBase)
 async def read_user(

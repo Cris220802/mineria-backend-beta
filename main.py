@@ -40,7 +40,8 @@ async def lifespan(app: FastAPI):
     # Inicializar el administrador de la base de datos
     init_admin_user(db)
     try:
-        load_all_artifacts() # Carga los modelos y el scaler
+        print("Iniciando servidor y cargando artefactos locales...")
+        load_all_artifacts()
         print("Artefactos de ML cargados exitosamente durante el inicio.")
     except Exception as e:
         print(f"FALLO AL CARGAR ARTEFACTOS DE ML DURANTE EL INICIO: {e}")

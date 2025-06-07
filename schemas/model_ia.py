@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 from datetime import date
 
 class HistoricalDataPoint(BaseModel):
@@ -7,10 +7,10 @@ class HistoricalDataPoint(BaseModel):
     value: float
 
 class PredictionResponse(BaseModel):
+    element: str
+    prediction_type: str # <-- NUEVO CAMPO
     predictions: Dict[str, float]
-    historical_pb_recovery: Optional[List[HistoricalDataPoint]] = None
-    trend: Optional[str] = None
-
-    class Config:
-        # from_attributes = True # Para Pydantic V2, si es necesario
-        pass
+    historical_data: List[HistoricalDataPoint]
+    trend: str
+    isError: bool = False
+    detail: Optional[str] = None

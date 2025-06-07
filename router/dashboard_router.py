@@ -24,23 +24,28 @@ async def get_dashboard(
     db: db_dependency, 
     permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta")),
 ):
+    # El try-except externo aquí es para errores en la orquestación misma del endpoint get_dashboard,
+    # no para los errores de obtención de datos de las sub-funciones, que _fetch_dashboard_part_safely maneja.
     try:
-        resumen = get_element_resume(db=db)
-        recuperaciones = get_recuperaciones(db=db)
-        contenidos = get_contenidos(db=db)
-        leyes = get_leyes(db=db)
-        ensayes = get_ensayes(db=db)
-        
+        resumen_data = _fetch_dashboard_part_safely(get_element_resume, db=db)
+        recuperaciones_data = _fetch_dashboard_part_safely(get_recuperaciones, db=db)
+        contenidos_data = _fetch_dashboard_part_safely(get_contenidos, db=db)
+        leyes_data = _fetch_dashboard_part_safely(get_leyes, db=db)
+        # Para get_ensayes, si no tiene parámetros obligatorios por defecto para el dashboard general:
+        ensayes_data = _fetch_dashboard_part_safely(get_ensayes_dia, db=db) # Ajusta parámetros si es necesario
+
         return {
-            "resumen": resumen,
-            "recuperaciones": recuperaciones,
-            "contenidos": contenidos,
-            "leyes": leyes,
-            "ensayes": ensayes
+            "resumen": resumen_data,
+            "recuperaciones": recuperaciones_data,
+            "contenidos": contenidos_data,
+            "leyes": leyes_data,
+            "ensayes_dia": ensayes_data
         }
     except Exception as e:
-        print(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Este error es si algo falla en la lógica del endpoint get_dashboard mismo,
+        # fuera de las llamadas a _fetch_dashboard_part_safely.
+        print(f"Error crítico al ensamblar el dashboard principal: {type(e).__name__} - {e}")
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno general al generar el dashboard.")
 
 @router.get("/resumen")
 async def get_resumen(
@@ -50,15 +55,19 @@ async def get_resumen(
     final_date: Optional[str] = Query(None, alias="final date", description="Fecha final de busqueda (opcional)"),
 ):
     try:
-        print(init_date)
-        print(final_date)
         resumen = get_element_resume(init_date=init_date, final_date=final_date, db=db)
         
         return {
             "resumen": resumen
         }
+    except HTTPException as he:
+        # Si get_element_resume (o cualquier lógica aquí) lanza una HTTPException,
+        # la relanzamos para que FastAPI la maneje con su código y detalle originales.
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Para cualquier otra excepción inesperada.
+        print(f"Error inesperado en /dashboard/resumen: {type(e).__name__} - {e}") # Log del error en el servidor
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno inesperado al procesar el resumen.")
     
 @router.get("/recuperaciones")
 async def get_recuperaciones(
@@ -74,8 +83,14 @@ async def get_recuperaciones(
         return {
             "recuperaciones": recuperaciones
         }
+    except HTTPException as he:
+        # Si get_element_resume (o cualquier lógica aquí) lanza una HTTPException,
+        # la relanzamos para que FastAPI la maneje con su código y detalle originales.
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Para cualquier otra excepción inesperada.
+        print(f"Error inesperado en /dashboard/recuperaciones: {type(e).__name__} - {e}") # Log del error en el servidor
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno inesperado al procesar el resumen.")
 
 @router.get("/contenidos")
 async def get_contenidos(
@@ -91,8 +106,14 @@ async def get_contenidos(
         return {
             "contenidos": contenidos
         }
+    except HTTPException as he:
+        # Si get_element_resume (o cualquier lógica aquí) lanza una HTTPException,
+        # la relanzamos para que FastAPI la maneje con su código y detalle originales.
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Para cualquier otra excepción inesperada.
+        print(f"Error inesperado en /dashboard/contenidos: {type(e).__name__} - {e}") # Log del error en el servidor
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno inesperado al procesar el resumen.")
      
 @router.get("/leyes")
 async def get_leyes(
@@ -108,8 +129,14 @@ async def get_leyes(
         return {
             "leyes": leyes
         }
+    except HTTPException as he:
+        # Si get_element_resume (o cualquier lógica aquí) lanza una HTTPException,
+        # la relanzamos para que FastAPI la maneje con su código y detalle originales.
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Para cualquier otra excepción inesperada.
+        print(f"Error inesperado en /dashboard/leyes: {type(e).__name__} - {e}") # Log del error en el servidor
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno inesperado al procesar el resumen.")
     
 @router.get("/ensayes")
 async def get_ensayes(
@@ -127,8 +154,35 @@ async def get_ensayes(
         return {
             "ensayes": ensayes
         }
+    except HTTPException as he:
+        # Si get_element_resume (o cualquier lógica aquí) lanza una HTTPException,
+        # la relanzamos para que FastAPI la maneje con su código y detalle originales.
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Para cualquier otra excepción inesperada.
+        print(f"Error inesperado en /dashboard/leyes: {type(e).__name__} - {e}") # Log del error en el servidor
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno inesperado al procesar el resumen.")
+    
+@router.get("/ensaye/dia")
+async def get_ensayes_dia(
+    db: db_dependency, 
+    permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta")),
+):
+    try:
+        ensayes = get_ensayes_dia(db=db)
+        
+        return {
+            "ensayes_dia": ensayes
+        }
+    except HTTPException as he:
+        # Si get_element_resume (o cualquier lógica aquí) lanza una HTTPException,
+        # la relanzamos para que FastAPI la maneje con su código y detalle originales.
+        raise he
+    except Exception as e:
+        # Para cualquier otra excepción inesperada.
+        print(f"Error inesperado en /dashboard/leyes: {type(e).__name__} - {e}") # Log del error en el servidor
+        raise HTTPException(status_code=500, detail="Ocurrió un error interno inesperado al procesar el resumen.")
+    return
     
 def get_element_resume(init_date=None, final_date=None, db=db_dependency):
     today = date.today()
@@ -147,9 +201,10 @@ def get_element_resume(init_date=None, final_date=None, db=db_dependency):
     else:
         init_date = today
         final_date = today
+        print(f"DEBUG: date.today() utilizada como init_date: {init_date}, final_date: {final_date}") # <-- AÑADE ESTO
         past_init_date = today - timedelta(days=1)
         past_final_date = today - timedelta(days=1)
-
+        
     # Obtener los ensayes actuales
     ensayes = db.query(Ensaye).options(
         joinedload(Ensaye.user),
@@ -160,6 +215,7 @@ def get_element_resume(init_date=None, final_date=None, db=db_dependency):
         func.date(Ensaye.fecha) <= final_date
     ).all()
 
+    print(ensayes)
     if not ensayes:
         raise HTTPException(status_code=400, detail="No se encontraron ensayes en las fechas seleccionadas.")
 
@@ -607,3 +663,40 @@ def get_ensayes(init_date=None, final_date=None, user_id=None, skip=0, limit=10,
     ensayes = query.offset(skip * limit).limit(limit).all()
 
     return [EnsayeResponse.model_validate(ensaye) for ensaye in ensayes]
+
+def get_ensayes_dia(db=db_dependency):
+    today = date.today()
+    
+    query = db.query(Ensaye).options(
+        joinedload(Ensaye.user),
+        joinedload(Ensaye.producto),
+    ).filter(
+        func.date(Ensaye.fecha) >= today,
+        func.date(Ensaye.fecha) <= today
+    )
+    
+    ensayes = query.all()
+
+    return ensayes
+
+def _fetch_dashboard_part_safely(fetch_function, *args, **kwargs):
+    """
+    Ejecuta una función para obtener una parte del dashboard.
+    Si la función lanza HTTPException, devuelve el mensaje de detalle.
+    Si lanza cualquier otra Exception, devuelve un mensaje de error genérico para esa parte.
+    Si tiene éxito, devuelve los datos.
+    """
+    function_name = fetch_function.__name__
+    try:
+        return fetch_function(*args, **kwargs)
+    except HTTPException as he:
+        # Para errores "esperados" (como "no hay datos"), devolvemos el mensaje.
+        print(f"INFO: Faltan datos para '{function_name}' en dashboard principal: {he.detail}")
+        return {
+                "isError": True,
+                "detail": he.detail
+            }  # Esto se convertirá en el valor para la clave de esta sección
+    except Exception as e:
+        # Para errores de servidor inesperados dentro de la función de servicio.
+        print(f"ERROR: Error inesperado en '{function_name}' al construir dashboard principal: {type(e).__name__} - {e}")
+        return f"Error interno al procesar datos para '{function_name.replace('get_', '')}'."

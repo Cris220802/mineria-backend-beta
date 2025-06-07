@@ -1,290 +1,194 @@
-# app/routers/predict.py
-
-from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import Dict, Any, Optional, List as PyList
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Dict, Optional, List as PyList
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-# from sqlalchemy.orm import joinedload # Optimizado para no usarlo si no es necesario para este cálculo
-
+from enum import Enum
 import pandas as pd
-import numpy as np
 
-# Modelos de base de datos
-from models.Ensaye import Ensaye
+# Modelos de base de datos y dependencia
 from models.Elemento import Elemento
-# from models.weaks.Circuito import Circuito # No se usa directamente en la lógica actual de get_pb_recovery_data_from_db
+from models.Ensaye import Ensaye
 from models.associations.elemento_circuito import CircuitoElemento
-
-# Dependencia de base de datos
 from db.database import get_db
 
 # Esquemas Pydantic
-from schemas.model_ia import PredictionResponse, HistoricalDataPoint # Importa ambos
+from schemas.model_ia import PredictionResponse, HistoricalDataPoint
 
-# Artefactos de ML y lógica de características
-from ml.artifacts import get_scaler, get_models, get_scaler_feature_names
-from ml.feature_engineering import generar_caracteristicas_temporales_api
+# Lógica de ML y Configuración
+from ml.artifacts import get_artifacts_for_element
+# ¡IMPORTANTE! Asegúrate de que esta función exista en tu carpeta ml/
+from ml.feature_engineering import generar_caracteristicas_para_prediccion 
+from config import ELEMENT_CONFIG, HORIZONTES
+from auth.auth import permission_required
 
-# Configuración
-from config import COLUMNA_OBJETIVO, HORIZONTES, NUM_LAGS
 
-# Clases internas para el procesamiento de datos desde la BD
+# --- Clases Internas y Enums ---
+
 class ElementoValorRecuperacionInternal:
+    """Clase interna para el manejo de datos procesados desde la BD."""
     date: date
     valor: float
 
+# Enum para validación de rutas en FastAPI, se basa en tu config
+class ElementSymbol(str, Enum):
+    Pb = "Pb"
+    Au = "Au"
+    Ag = "Ag"
+    Zn = "Zn"
+    # Añade aquí otros elementos si los configuras, ej: Zn = "Zn"
+    
 router = APIRouter(
     prefix="/predicciones",
-    tags=['predicciones']
+    tags=['Predicciones Dinámicas']
 )
 
-def get_pb_recovery_data_from_db(
-    db: Session,
-    # Opcional: init_date_param: Optional[date] = None,
-    # Opcional: final_date_param: Optional[date] = None
+# --- Funciones de Lógica de Datos ---
+
+def get_recovery_data_from_db(
+    db: Session, 
+    element_name: str,
+    days_limit: int = 90  # Límite de días para optimizar la consulta
 ) -> PyList[ElementoValorRecuperacionInternal]:
     """
-    Obtiene y procesa los datos de recuperación promedio diaria para el elemento 'PB'.
-    La recuperación diaria se calcula como:
-    (Suma de todas las 'distribucion' de PB de etapas relevantes en todos los ensayes de un día) / (Número de ensayes en ese día)
+    Obtiene y procesa los datos de recuperación promedio diaria para un elemento específico.
     """
-    # 1. Encontrar el elemento 'PB'
-    pb_elemento_obj = db.query(Elemento).filter(func.upper(Elemento.name) == "PB").first()
-    if not pb_elemento_obj:
-        raise ValueError("Elemento 'PB' no encontrado en la configuración de la base de datos.")
+    print(f"Obteniendo los últimos {days_limit} días de datos para el elemento: {element_name.upper()}...")
+    
+    elemento_obj = db.query(Elemento).filter(func.upper(Elemento.name) == element_name.upper()).first()
+    if not elemento_obj:
+        raise ValueError(f"Elemento '{element_name}' no encontrado en la base de datos.")
 
-    # 2. Obtener todos los ensayes (solo ID y fecha para eficiencia)
-    # Si se añaden init_date_param y final_date_param, filtrar aquí la query de Ensaye.
-    # Por ejemplo:
-    # ensaye_query = db.query(Ensaye.id, Ensaye.fecha)
-    # if init_date_param:
-    #     ensaye_query = ensaye_query.filter(func.date(Ensaye.fecha) >= init_date_param)
-    # if final_date_param:
-    #     ensaye_query = ensaye_query.filter(func.date(Ensaye.fecha) <= final_date_param)
-    # all_ensayes_data = ensaye_query.all()
-    all_ensayes_data = db.query(Ensaye.id, Ensaye.fecha).all()
+    start_date_filter = date.today() - timedelta(days=days_limit)
+    all_ensayes_data = db.query(
+        Ensaye.id, 
+        Ensaye.fecha
+    ).filter(
+        func.date(Ensaye.fecha) >= start_date_filter
+    ).all()
 
     if not all_ensayes_data:
         return []
 
-    # Mapeos:
-    # ensaye_id -> fecha (como objeto date)
-    # fecha (como objeto date) -> set de ensaye_ids de ese día
     ensaye_id_to_date_map = {ensaye_id: fecha_ens.date() for ensaye_id, fecha_ens in all_ensayes_data}
     date_to_ensaye_ids_map = {}
     for ensaye_id, fecha_ens_obj in ensaye_id_to_date_map.items():
-        if fecha_ens_obj not in date_to_ensaye_ids_map:
-            date_to_ensaye_ids_map[fecha_ens_obj] = set()
-        date_to_ensaye_ids_map[fecha_ens_obj].add(ensaye_id)
+        date_to_ensaye_ids_map.setdefault(fecha_ens_obj, set()).add(ensaye_id)
 
-    all_ensayes_ids_list = [ensaye_id for ensaye_id, _ in all_ensayes_data]
-
-    # 3. Obtener datos de CircuitoElemento para 'PB' y etapas relevantes
-    etapas_relevantes_pb = ["CONCPB", "CONCZN", "CONCFE"] # Según tu ejemplo
+    all_ensayes_ids_list = list(ensaye_id_to_date_map.keys())
+    etapas_relevantes = ["CONCPB", "CONCZN", "CONCFE"]
     
-    # Seleccionar solo las columnas necesarias de CircuitoElemento
-    circuitos_pb_data = db.query(
+    circuitos_data = db.query(
         CircuitoElemento.circuito_ensaye_id,
         CircuitoElemento.distribucion
     ).filter(
         and_(
             CircuitoElemento.circuito_ensaye_id.in_(all_ensayes_ids_list),
-            CircuitoElemento.elemento_id == pb_elemento_obj.id,
-            CircuitoElemento.circuito_etapa.in_(etapas_relevantes_pb)
+            CircuitoElemento.elemento_id == elemento_obj.id,
+            CircuitoElemento.circuito_etapa.in_(etapas_relevantes)
         )
     ).all()
-
-    if not circuitos_pb_data:
+    
+    if not circuitos_data:
         return []
 
-    # 4. Acumular la suma total de 'distribucion' de PB por fecha
-    daily_pb_total_distribucion = {}  # {date_obj: sum_of_distribucion_for_pb_on_this_date}
-    for ce_ensaye_id, ce_distribucion in circuitos_pb_data:
+    daily_total_distribucion = {}
+    for ce_ensaye_id, ce_distribucion in circuitos_data:
         ensaye_date_obj = ensaye_id_to_date_map.get(ce_ensaye_id)
-        if not ensaye_date_obj: # No debería ocurrir si all_ensayes_ids_list es completo
-            continue
+        if ensaye_date_obj:
+            daily_total_distribucion[ensaye_date_obj] = daily_total_distribucion.get(ensaye_date_obj, 0.0) + (ce_distribucion or 0.0)
 
-        if ensaye_date_obj not in daily_pb_total_distribucion:
-            daily_pb_total_distribucion[ensaye_date_obj] = 0.0
-        daily_pb_total_distribucion[ensaye_date_obj] += ce_distribucion or 0.0
-
-    # 5. Calcular el promedio diario y construir la lista de resultados
     processed_valores: PyList[ElementoValorRecuperacionInternal] = []
-    for current_date_obj, total_dist_for_day in sorted(daily_pb_total_distribucion.items()):
-        num_ensayes_on_this_day = len(date_to_ensaye_ids_map.get(current_date_obj, set()))
-        
-        avg_recovery_for_day = 0.0
-        if num_ensayes_on_this_day > 0:
-            avg_recovery_for_day = total_dist_for_day / num_ensayes_on_this_day
+    for current_date, total_dist in sorted(daily_total_distribucion.items()):
+        num_ensayes_on_day = len(date_to_ensaye_ids_map.get(current_date, set()))
+        avg_recovery = total_dist / num_ensayes_on_day if num_ensayes_on_day > 0 else 0.0
         
         valor_rec = ElementoValorRecuperacionInternal()
-        valor_rec.date = current_date_obj
-        valor_rec.valor = avg_recovery_for_day
+        valor_rec.date = current_date
+        valor_rec.valor = avg_recovery
         processed_valores.append(valor_rec)
         
-    # La lista ya está ordenada por fecha debido a sorted(daily_pb_total_distribucion.items())
     return processed_valores
 
-
 def calculate_trend(predictions: Dict[str, float], last_actual_value: Optional[float] = None) -> str:
-    """
-    Calcula una tendencia simple basada en las predicciones.
-    """
-    if not predictions:
-        return "Indeterminada"
-
+    if not predictions: return "Indeterminada"
     sorted_horizons = sorted(predictions.keys(), key=lambda x: int(x.split('_')[-1]))
-    if not sorted_horizons:
-        return "Indeterminada"
-
-    # Valor inicial para la comparación de tendencia
+    if not sorted_horizons: return "Indeterminada"
     val_start_trend = last_actual_value if last_actual_value is not None else predictions[sorted_horizons[0]]
-    
-    # Valor final (la última predicción)
     val_end_trend = predictions[sorted_horizons[-1]]
-
-    threshold_percentage = 0.5 # Ejemplo: 0.5% de cambio relativo al valor inicial
-    
-    if val_start_trend == 0: # Evitar división por cero
-        if val_end_trend > 0: change_percentage = float('inf')
-        elif val_end_trend < 0: change_percentage = float('-inf')
-        else: change_percentage = 0.0
+    threshold = 0.5 
+    if val_start_trend == 0:
+        change_percentage = float('inf') if val_end_trend > 0 else 0.0
     else:
         change_percentage = ((val_end_trend - val_start_trend) / abs(val_start_trend)) * 100
+    if change_percentage > threshold: return "Alza"
+    elif change_percentage < -threshold: return "Baja"
+    else: return "Estable"
 
-    if change_percentage > threshold_percentage:
-        return "Alza"
-    elif change_percentage < -threshold_percentage:
-        return "Baja"
-    else:
-        return "Estable"
-
-# --- Endpoint de Predicción ---
-@router.post("/pb_recovery_forecast/", response_model=PredictionResponse)
-async def predict_pb_recovery_from_db(
-    db: Session = Depends(get_db)
-    # Opcional: Considera añadir parámetros de Query para init_date y final_date
-    # y pasarlos a get_pb_recovery_data_from_db si necesitas controlar el rango de historial.
+# --- ENDPOINT DE PREDICCIÓN GENÉRICO ---
+@router.post("/forecast/{element_symbol}", response_model=PredictionResponse)
+async def predict_recovery_forecast(
+    element_symbol: ElementSymbol,
+    db: Session = Depends(get_db),
+    permission: dict = Depends(permission_required("Supervisor General"))
 ):
-    global_scaler, global_models, global_scaler_feature_names = None, None, None
+    element = element_symbol.value
     try:
-        global_scaler = get_scaler()
-        global_models = get_models()
-        global_scaler_feature_names = get_scaler_feature_names()
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=f"Artefactos de ML no disponibles: {str(e)}")
-
-    try:
-        # Nota: Si añades parámetros de fecha al endpoint, pásalos aquí:
-        # pb_valores_internal: PyList[ElementoValorRecuperacionInternal] = get_pb_recovery_data_from_db(
-        #     db=db, init_date_param=parsed_init_date, final_date_param=parsed_final_date
-        # )
-        pb_valores_internal: PyList[ElementoValorRecuperacionInternal] = get_pb_recovery_data_from_db(db=db)
-    except ValueError as ve: # Ej., si 'PB' no se encuentra
-        raise HTTPException(status_code=404, detail=str(ve))
+        config = ELEMENT_CONFIG[element]
+        artifacts = get_artifacts_for_element(element)
+        scaler, models, feature_names = artifacts["scaler"], artifacts["models"], artifacts["feature_names"]
+        columna_objetivo, num_lags = config["columna_objetivo"], config["num_lags"]
         
-    if not pb_valores_internal:
-        # Considera qué devolver si no hay datos históricos en absoluto
-        return PredictionResponse(
-            predictions={},
-            historical_pb_recovery=[],
-            trend="No hay datos históricos de PB disponibles para procesar."
-        )
+        historical_values = get_recovery_data_from_db(db=db, element_name=element, days_limit=90)
+        
+        if not historical_values:
+            return PredictionResponse(element=element, prediction_type="Sin Datos", predictions={}, historical_data=[], trend="Indeterminada", isError=True, detail="No hay datos históricos disponibles para procesar.")
 
-    historical_data_points = [{"date": evr.date, COLUMNA_OBJETIVO: evr.valor} for evr in pb_valores_internal]
-    
-    history_df = pd.DataFrame(historical_data_points)
-    if history_df.empty: # Doble chequeo, aunque pb_valores_internal ya lo cubriría
-        return PredictionResponse(
-            predictions={},
-            historical_pb_recovery=[],
-            trend="El DataFrame de datos históricos de PB está vacío."
-        )
+        history_df = pd.DataFrame([{"date": evr.date, columna_objetivo: evr.valor} for evr in historical_values])
+        history_df['date'] = pd.to_datetime(history_df['date'])
+        history_df = history_df.set_index('date').sort_index().groupby(level=0).mean()
+        
+        historical_output = [HistoricalDataPoint(date=idx.date(), value=row[columna_objetivo]) for idx, row in history_df.iloc[-15:].iterrows()]
+        last_actual_value = history_df.iloc[-1][columna_objetivo]
 
-    history_df['date'] = pd.to_datetime(history_df['date'])
-    history_df = history_df.set_index('date').sort_index()
-    
-    if history_df.index.has_duplicates:
-        history_df = history_df.groupby(history_df.index).mean()
-    
-    # --- Preparar historial para la respuesta ---
-    historical_recovery_output: PyList[HistoricalDataPoint] = []
-    last_actual_value_for_trend: Optional[float] = None
-    if not history_df.empty:
-        last_15_days_df = history_df.iloc[-15:] 
-        for record_date_idx, row in last_15_days_df.iterrows():
-            record_date = record_date_idx.date() 
-            value = row[COLUMNA_OBJETIVO]
-            historical_recovery_output.append(HistoricalDataPoint(date=record_date, value=value))
-        if not last_15_days_df.empty:
-            last_actual_value_for_trend = last_15_days_df.iloc[-1][COLUMNA_OBJETIVO]
+        max_rolling_window = max(config.get("ventanas_rolling", [0]))
+        min_points_for_robust = max(num_lags, max_rolling_window) + 1
 
-    # --- Validar y generar características para predicción ---
-    min_required_points = NUM_LAGS + 1 # O max(NUM_LAGS, mayor_ventana_rolling) + 1
-    if len(history_df) < min_required_points:
-        return PredictionResponse(
-            predictions={},
-            historical_pb_recovery=historical_recovery_output,
-            trend=f"Insuficientes datos históricos ({len(history_df)}) para predicción. Se requieren {min_required_points}."
-        )
-
-    try:
-        features_df = generar_caracteristicas_temporales_api(
-            df_entrada=history_df[[COLUMNA_OBJETIVO]], 
-            nombre_columna_objetivo=COLUMNA_OBJETIVO,
-            training_feature_columns=global_scaler_feature_names
-        )
-    except ValueError as ve:
-        return PredictionResponse(
-            predictions={}, historical_pb_recovery=historical_recovery_output,
-            trend=f"Error generando características: {str(ve)}"
-        )
-
-    latest_features_raw = features_df.iloc[-1:]
-    if latest_features_raw.isnull().values.any():
-        nan_cols = latest_features_raw.columns[latest_features_raw.isnull().any(axis=0)].tolist()
-        return PredictionResponse(
-            predictions={}, historical_pb_recovery=historical_recovery_output,
-            trend=f"NaNs en características finales: {nan_cols}."
-        )
-    
-    try:
-        features_scaled = global_scaler.transform(latest_features_raw[global_scaler_feature_names])
-    except Exception as e:
-        return PredictionResponse(
-            predictions={}, historical_pb_recovery=historical_recovery_output,
-            trend=f"Error al escalar características: {str(e)}"
-        )
-
-    # --- Realizar Predicciones ---
-    predictions_output: Dict[str, float] = {}
-    # (El bucle de predicciones se mantiene igual)
-    for h in HORIZONTES:
-        model_name = f't_plus_{h}'
-        model = global_models.get(model_name)
-        if model:
-            try:
-                y_pred_h = model.predict(features_scaled)[0]
-                predictions_output[model_name] = float(y_pred_h)
-            except Exception as e:
-                return PredictionResponse(
-                    predictions=predictions_output, # Podrían ser predicciones parciales
-                    historical_pb_recovery=historical_recovery_output,
-                    trend=f"Error en predicción para {model_name}: {str(e)}"
-                )
-        else:
-            return PredictionResponse(
-                predictions=predictions_output,
-                historical_pb_recovery=historical_recovery_output,
-                trend=f"Modelo {model_name} no encontrado."
+        if len(history_df) >= min_points_for_robust:
+            print(f"Datos suficientes ({len(history_df)} >= {min_points_for_robust}). Realizando predicción robusta.")
+            features_df = generar_caracteristicas_para_prediccion(
+                df_historial=history_df,
+                nombre_columna_objetivo=columna_objetivo,
+                config=config,
+                nombres_features_entrenamiento=feature_names
             )
-    
-    # --- Calcular Tendencia ---
-    trend_description = calculate_trend(predictions_output, last_actual_value_for_trend)
-    
-    return PredictionResponse(
-        predictions=predictions_output,
-        historical_pb_recovery=historical_recovery_output,
-        trend=trend_description
-    )
+            
+            if features_df.isnull().values.any():
+                nan_cols = features_df.columns[features_df.isna().any()].tolist()
+                return PredictionResponse(element=element, prediction_type="Error de Características", predictions={}, historical_data=historical_output, trend="Indeterminada", isError=True, detail=f"NaNs encontrados en características: {nan_cols}.")
+
+            features_scaled = scaler.transform(features_df)
+            
+            predictions_output = {f't_plus_{h}': float(models[f't_plus_{h}'].predict(features_scaled)[0]) for h in HORIZONTES}
+            trend = calculate_trend(predictions_output, last_actual_value)
+            
+            return PredictionResponse(element=element, prediction_type="Robusta", predictions=predictions_output, historical_data=historical_output, trend=trend)
+        else:
+            print(f"Datos insuficientes ({len(history_df)} < {min_points_for_robust}). Realizando predicción simple.")
+            predictions_output = {f't_plus_{h}': last_actual_value for h in HORIZONTES}
+            
+            return PredictionResponse(
+                element=element,
+                prediction_type="Simple (Datos Insuficientes)",
+                predictions=predictions_output,
+                historical_data=historical_output,
+                trend="Estable"
+            )
+
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=503, detail=f"Artefactos de ML no disponibles: {str(re)}")
+    except Exception as e:
+        print(f"ERROR INESPERADO: {e}") # Loguear el error real para depuración
+        raise HTTPException(status_code=500, detail=f"Error inesperado durante la predicción.")

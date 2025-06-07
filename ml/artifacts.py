@@ -1,96 +1,80 @@
-import boto3
 import joblib
-from io import BytesIO
 from typing import Dict, Any
-from sklearn.preprocessing import StandardScaler
-from dotenv import load_dotenv
 import os
-# Asumiendo que LightGBMRegressor fue guardado con joblib, si no, ajusta la carga
-# from lightgbm import LGBMRegressor # Solo para type hinting si es necesario
+from pathlib import Path # Usaremos pathlib para un manejo de rutas más robusto
 
+# Importamos la nueva configuración
 from config import (
-    S3_BUCKET_NAME,
-    MODEL_S3_PREFIX,
+    LOCAL_MODELS_DIR, # <-- ¡Importante!
     HORIZONTES,
-    SCALER_PB_FILENAME,
-    MODEL_FILENAME_TEMPLATE
+    ELEMENT_CONFIG
 )
 
-load_dotenv()
+# --- Ya no se necesita boto3, dotenv, ni asyncio ---
 
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-AWS_SCRET_ACCESS_KEY = os.getenv('AWS_SCRET_ACCESS_KEY')
+# La estructura de datos global no cambia
+ML_ARTIFACTS: Dict[str, Dict[str, Any]] = {}
 
-# Variables globales para almacenar los artefactos cargados
-SCALER: StandardScaler = None
-MODELS: Dict[str, Any] = {} # Ej: {"t_plus_1": LGBMRegressor(), ...}
-SCALER_FEATURE_NAMES: list = None # Almacenará scaler.feature_names_in_
+def load_artifacts_for_element(element: str):
+    """Carga el scaler y los modelos para un elemento específico desde el disco local."""
+    global ML_ARTIFACTS
 
-def load_all_artifacts():
-    global SCALER, MODELS, SCALER_FEATURE_NAMES
-    
-    if SCALER and MODELS: # Evita recargar si ya están cargados
-        print("Artefactos de ML ya están cargados.")
+    if element in ML_ARTIFACTS:
+        print(f"Artefactos para '{element}' ya están cargados.")
         return
 
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SCRET_ACCESS_KEY,
-        region_name='us-east-1'
-    )
-    print("Cargando artefactos de ML desde S3...")
+    print(f"Cargando artefactos locales para el elemento: '{element}'...")
+    
+    config = ELEMENT_CONFIG.get(element)
+    if not config:
+        raise ValueError(f"No se encontró configuración para el elemento '{element}'.")
 
-    try:
-        # Cargar Scaler
-        scaler_key = f"{MODEL_S3_PREFIX}{SCALER_PB_FILENAME}"
-        scaler_obj = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=scaler_key)
-        scaler_bytes = BytesIO(scaler_obj['Body'].read())
-        SCALER = joblib.load(scaler_bytes)
-        # Guardar los nombres de las características que el scaler espera
-        if hasattr(SCALER, 'feature_names_in_'):
-            SCALER_FEATURE_NAMES = list(SCALER.feature_names_in_)
-        else:
-            # Si feature_names_in_ no está (versiones antiguas de sklearn),
-            # necesitarías haber guardado esta lista por separado.
-            print("Advertencia: scaler.feature_names_in_ no encontrado. La validación de columnas puede ser incompleta.")
-            # Deberías tener una forma de obtener esta lista si no está en el scaler.
-            # SCALER_FEATURE_NAMES = [...] # Cargarla desde un archivo de metadatos por ejemplo
+    base_path = Path(LOCAL_MODELS_DIR)
+    artifacts = {"scaler": None, "models": {}, "feature_names": []}
+    
+    # 1. Cargar Scaler desde archivo local
+    scaler_path = base_path / config['scaler_filename']
+    if not scaler_path.is_file():
+        raise FileNotFoundError(f"No se encontró el archivo scaler para '{element}' en: {scaler_path}")
+    
+    artifacts["scaler"] = joblib.load(scaler_path)
+    
+    if hasattr(artifacts["scaler"], 'feature_names_in_'):
+        artifacts["feature_names"] = list(artifacts["scaler"].feature_names_in_)
+    
+    print(f"Scaler para '{element}' cargado desde {scaler_path}.")
 
-        print(f"Scaler cargado. Espera {len(SCALER_FEATURE_NAMES or [])} características: {SCALER_FEATURE_NAMES}")
-
-
-        # Cargar Modelos
-        for h in HORIZONTES:
-            model_filename = MODEL_FILENAME_TEMPLATE.format(h=h)
-            model_key = f"{MODEL_S3_PREFIX}{model_filename}"
-            model_obj = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=model_key)
-            model_bytes = BytesIO(model_obj['Body'].read())
+    # 2. Cargar Modelos desde archivos locales
+    for h in HORIZONTES:
+        model_filename = config['model_filename_template'].format(h=h)
+        model_path = base_path / model_filename
+        
+        if not model_path.is_file():
+            raise FileNotFoundError(f"No se encontró el archivo de modelo para '{element}' en: {model_path}")
             
-            model_name = f't_plus_{h}' # Ej: 't_plus_1'
-            MODELS[model_name] = joblib.load(model_bytes)
-        print(f"{len(MODELS)} modelos cargados exitosamente.")
+        model_name = f't_plus_{h}'
+        artifacts["models"][model_name] = joblib.load(model_path)
+    
+    print(f"{len(artifacts['models'])} modelos para '{element}' cargados exitosamente.")
+    
+    ML_ARTIFACTS[element] = artifacts
 
+def load_all_artifacts():
+    """Función principal que carga los artefactos para todos los elementos definidos."""
+    print("Iniciando carga de artefactos de ML desde el disco local...")
+    try:
+        for element_symbol in ELEMENT_CONFIG:
+            load_artifacts_for_element(element_symbol)
+        print("Carga de todos los artefactos completada.")
     except Exception as e:
-        print(f"Error crítico al cargar artefactos de ML desde S3: {e}")
-        # Decide cómo manejar esto: ¿elevar una excepción para detener el inicio de la app?
-        # ¿o permitir que la app inicie pero las rutas de predicción fallen?
-        # Por seguridad, es mejor elevar la excepción para saber que algo anda mal.
+        # Un error aquí es crítico y debe detener el inicio de la app
+        print(f"Error crítico al cargar artefactos locales: {e}")
         raise RuntimeError(f"Falla al cargar artefactos de ML: {e}")
 
-# Opcional: funciones getter para acceder a los artefactos de forma segura
-def get_scaler() -> StandardScaler:
-    if not SCALER:
-        raise RuntimeError("Scaler no ha sido cargado. Asegúrate de llamar a load_all_artifacts().")
-    return SCALER
-
-def get_models() -> Dict[str, Any]:
-    if not MODELS:
-        raise RuntimeError("Modelos no han sido cargados. Asegúrate de llamar a load_all_artifacts().")
-    return MODELS
-
-def get_scaler_feature_names() -> list:
-    if not SCALER_FEATURE_NAMES:
-         # Esto podría pasar si SCALER no se cargó o feature_names_in_ no estaba disponible.
-        raise RuntimeError("Nombres de características del scaler no disponibles. Asegúrate de que el scaler esté cargado y tenga 'feature_names_in_'.")
-    return SCALER_FEATURE_NAMES
+def get_artifacts_for_element(element: str) -> Dict[str, Any]:
+    """Obtiene de forma segura los artefactos para un elemento."""
+    if element not in ML_ARTIFACTS:
+        # En un entorno local, la carga es tan rápida que no debería ocurrir si load_all_artifacts se llamó al inicio.
+        # Si ocurre, es un error de configuración.
+         raise RuntimeError(f"Los artefactos para '{element}' no fueron cargados. Verifica la configuración y el arranque de la app.")
+    return ML_ARTIFACTS[element]
