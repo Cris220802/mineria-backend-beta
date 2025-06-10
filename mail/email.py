@@ -2,9 +2,7 @@ from mailersend import emails
 import os
 from dotenv import load_dotenv
 from datetime import datetime
-import locale
-
-locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+from  babel.dates import format_datetime
 
 load_dotenv()
 
@@ -12,11 +10,7 @@ mailer = emails.NewEmail(os.getenv('API_KEY_MAILSENDER'))
 
 async def send_notification(users, essay_id, essay_date, essay_shift) -> bool:
     try:
-        # Formatear la fecha en español
-        fecha_formateada = essay_date.strftime('%d de %B de %Y')
-
-        # Formatear la hora por separado
-        hora_formateada = essay_date.strftime('%H:%M:%S')
+        fecha_formateada = format_datetime(essay_date, "d 'de' MMMM 'de' yyyy", locale='es_ES')
 
         subject = f"Ensaye #{essay_id}, {fecha_formateada}. Ya disponible."
 
