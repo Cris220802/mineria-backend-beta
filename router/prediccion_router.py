@@ -130,7 +130,7 @@ def calculate_trend(predictions: Dict[str, float], last_actual_value: Optional[f
 async def predict_recovery_forecast(
     element_symbol: ElementSymbol,
     db: Session = Depends(get_db),
-    permission: dict = Depends(permission_required("Supervisor General"))
+    permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta"))
 ):
     element = element_symbol.value
     try:
@@ -172,7 +172,7 @@ async def predict_recovery_forecast(
             predictions_output = {f't_plus_{h}': float(models[f't_plus_{h}'].predict(features_scaled)[0]) for h in HORIZONTES}
             trend = calculate_trend(predictions_output, last_actual_value)
             
-            return PredictionResponse(element=element, prediction_type="Robusta", predictions=predictions_output, historical_data=historical_output, trend=trend)
+            return PredictionResponse(element=element, prediction_type="Robusta (ML)", predictions=predictions_output, historical_data=historical_output, trend=trend)
         else:
             print(f"Datos insuficientes ({len(history_df)} < {min_points_for_robust}). Realizando predicción simple.")
             predictions_output = {f't_plus_{h}': last_actual_value for h in HORIZONTES}

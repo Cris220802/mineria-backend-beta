@@ -131,7 +131,7 @@ async def create_ensaye(
 @router.get("/")
 async def get_all_ensayes(
     db: db_dependency, 
-    permission: dict = Depends(permission_required("Supervisor General")),
+    permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta", "Supervisor de Ensayista")),
     skip: int = Query(0, description="Número de página (0 por defecto)"),
     limit: int = Query(5, le=50, description="Cantidad de registros por página (máx. 50)"),
     init_date: Optional[str] = Query(None, description="Fecha inicial de busqueda (opcional)"),
@@ -298,7 +298,7 @@ async def get_ensayes_by_ensayista_by_id(
 async def get_ensaye_by_id(
     db: db_dependency,
     id: int,
-    permission: dict = Depends(permission_required("Supervisor General"))
+    permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta", "Supervisor de Ensayista"))
 ):
     try:
         ensaye = db.query(Ensaye).options(

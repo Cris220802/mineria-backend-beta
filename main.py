@@ -3,11 +3,6 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
 from starlette import status
-import lightgbm as lgb # Keep for type hinting if needed, but joblib loads the instance
-from sklearn.preprocessing import StandardScaler
-import joblib
-import boto3
-from io import BytesIO
 from contextlib import asynccontextmanager
 
 from db.database import engine, Base, get_db

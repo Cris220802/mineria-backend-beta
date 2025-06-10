@@ -24,7 +24,7 @@ router = APIRouter(
 @router.get("/")
 async def get_reporte(
     db: db_dependency, 
-    permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta")),
+    permission: dict = Depends(permission_required("Supervisor General", "Supervisor de Planta", "Supervisor de Ensayista")),
     init_date: Optional[str] = Query(None, alias="initial date", description="Fecha inicial de busqueda (opcional)"),
     final_date: Optional[str] = Query(None, alias="final date", description="Fecha final de busqueda (opcional)"),
     shift: Optional[int] = Query(None, alias="shift", description="Filtro de turno de reporte (opcional)"),
