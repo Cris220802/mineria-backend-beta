@@ -77,7 +77,7 @@ app.openapi = custom_openapi
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-mineria.vercel.app/"],  # Origen de tu frontend
+    allow_origins=["https://frontend-mineria.vercel.app"],  # Origen de tu frontend
     allow_credentials=True,  # Permitir cookies
     allow_methods=["GET", "POST", "PUT", "DELETE"],  # Permitir todos los métodos (GET, POST, etc.)
     allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],  # Permitir todos los headers
