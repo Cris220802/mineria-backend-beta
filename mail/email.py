@@ -75,7 +75,7 @@ async def send_notification(users, essay_id, essay_date, essay_shift) -> bool:
                                             </tr>
                                             <tr>
                                                 <td align="center" class="button-td">
-                                                    <a href="https://www.mineriapp.com/login" target="_blank" style="display: inline-block; background-color: #0D21A1; color: #FFFFFF !important; font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-decoration: none; padding: 12px 25px; border-radius: 5px;">Acceder a la Plataforma</a>
+                                                    <a href="https://frontend-mineria.vercel.app/" target="_blank" style="display: inline-block; background-color: #0D21A1; color: #FFFFFF !important; font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-decoration: none; padding: 12px 25px; border-radius: 5px;">Acceder a la Plataforma</a>
                                                 </td>
                                             </tr>
                                         </table>
