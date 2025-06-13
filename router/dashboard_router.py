@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_
-from datetime import date, timedelta
+from datetime import date, datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 
 from schemas.dashboard_schema import DashboardResponse, ResumenElemento, RecuperacionElemento, ElementoValorRecuperacion, ElementoValorContenido, ContenidoElemento, ElementoValorLey, LeyElemento, CalidadConcentrado, CalidadesConcentrados
@@ -185,8 +186,9 @@ async def get_ensayes_dia(
     return
     
 def get_element_resume(init_date=None, final_date=None, db=db_dependency):
-    today = date.today()
-
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
+    
     # Obtener el rango de fechas
     if init_date and final_date:
         try:
@@ -314,8 +316,9 @@ def get_element_resume(init_date=None, final_date=None, db=db_dependency):
     return resumen
 
 def get_recuperaciones(init_date=None, final_date=None, elements=[], db=db_dependency):
-    today = date.today()
-
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
+    
     # Obtener el rango de fechas
     if init_date and final_date:
         try:
@@ -419,7 +422,8 @@ def get_recuperaciones(init_date=None, final_date=None, elements=[], db=db_depen
     return recuperaciones
     
 def get_contenidos(init_date=None, final_date=None, elements=[], db=db_dependency):
-    today = date.today()
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
 
     # Obtener el rango de fechas
     if init_date and final_date:
@@ -524,7 +528,8 @@ def get_contenidos(init_date=None, final_date=None, elements=[], db=db_dependenc
     return contenidos
 
 def get_leyes(init_date=None, final_date=None, etapas=[], db=db_dependency):
-    today = date.today()
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
 
     # Obtener el rango de fechas
     if init_date and final_date:
@@ -633,7 +638,8 @@ def get_leyes(init_date=None, final_date=None, etapas=[], db=db_dependency):
     return leyes
 
 def get_ensayes(init_date=None, final_date=None, user_id=None, skip=0, limit=10, db=db_dependency):
-    today = date.today()
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
 
     # Obtener el rango de fechas
     if init_date and final_date:
@@ -665,7 +671,8 @@ def get_ensayes(init_date=None, final_date=None, user_id=None, skip=0, limit=10,
     return [EnsayeResponse.model_validate(ensaye) for ensaye in ensayes]
 
 def get_ensayes_dia(db=db_dependency):
-    today = date.today()
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
     
     query = db.query(Ensaye).options(
         joinedload(Ensaye.user),

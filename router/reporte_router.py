@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 
 from db.database import db_dependency
@@ -53,7 +54,8 @@ def get_report(
     db=db_dependency
 ):
         
-    today = date.today()
+    MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+    today = datetime.now(MX_TIMEZONE).date()
 
     # Obtener el rango de fechas
     if init_date and final_date:

@@ -24,7 +24,6 @@ loaded_models = {}
 
 # Crear las tablas en la base de datos
 #Base.metadata.drop_all(engine)  # Borra todas las tablas
-
 Base.metadata.create_all(engine)
 
 @asynccontextmanager
@@ -77,8 +76,8 @@ app.openapi = custom_openapi
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    # allow_origins=["http://localhost:5173"],  # Origen de tu frontend
-    allow_origins=["https://frontend-mineria.vercel.app"],
+    allow_origins=["http://localhost:5173"],  # Origen de tu frontend
+    # allow_origins=["https://frontend-mineria.vercel.app"],
     allow_credentials=True,  # Permitir cookies
     allow_methods=["GET", "POST", "PUT", "DELETE"],  # Permitir todos los métodos (GET, POST, etc.)
     allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],  # Permitir todos los headers

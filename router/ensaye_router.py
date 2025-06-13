@@ -4,6 +4,7 @@ from sqlalchemy.orm import joinedload, Session
 from sqlalchemy import func, and_
 from starlette import status
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 import asyncio
 
@@ -148,7 +149,9 @@ async def get_all_ensayes(
                     status_code=422,
                     detail="Debe proporcionar ambas fechas (inicio y fin) o ninguna"
                 )
-            
+        MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+        today = datetime.now(MX_TIMEZONE).date()
+    
         today = date.today()
 
         # Obtener el rango de fechas
@@ -223,7 +226,8 @@ async def get_ensayes_by_ensayista(
         
             user_id = permission.id
             
-            today = date.today()
+            MX_TIMEZONE = ZoneInfo("America/Mexico_City")
+            today = datetime.now(MX_TIMEZONE).date()
 
             # Obtener el rango de fechas
             if init_date and final_date:
