@@ -109,8 +109,8 @@ async def send_notification(users, essay_id, essay_date, essay_shift) -> bool:
 
         recipients = [
             {
-                "name": "Cristopher Velazquez",
-                "email": "isareach779@gmail.com",
+                "name": "Supervisor General",
+                "email": "supervisor.general.mineria@gmail.com",
             }
         ]
         # Configurar el correo
